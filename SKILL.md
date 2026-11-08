@@ -1,11 +1,17 @@
 ---
 name: video-bilingual-captions
-description: 用户说“开双语字幕”“这个视频双语”“直播翻译”或要求网页视频中英翻译时使用。支持录播预翻译、边播边译，以及读取平台实时字幕的直播翻译；生成带拖动、透明、悬停工具栏和开关的浏览器用户脚本。
+description: 用户说“开双语字幕”“这个视频双语”“直播翻译”“同声传译”“开启中文同传”或要求网页视频中英字幕、中文语音播报时使用。支持录播预翻译、边播边译、读取平台实时字幕的直播翻译，以及已有完整译文的录播语音同传；不包含无字幕直播的采音听译。
 ---
 
-# 开双语字幕
+# 网页视频双语字幕与中文同传
 
 直接处理用户给出的或当前正在看的网页视频。已有字幕与译文时快速启用；首次转写或翻译需要时间，不能保证任何视频都秒开。
+
+## 先区分字幕和语音
+
+- “双语字幕”“翻译字幕”：沿用字幕流程，不生成或开启语音。
+- “同声传译”“中文同传”“听中文”“语音播报”：读取 [references/speech.md](references/speech.md)，复用已有译文和可选语音模块；不能只显示字幕就声称同传完成。
+- 两者都要：共用同一视频的数据，字幕和语音保持独立开关。新增语音不改变原字幕的显示、模式或原生 CC。
 
 ## 先判断来源，再选择模式
 
@@ -53,4 +59,4 @@ JSON：`{"cues":[{"start":0,"end":3,"en":"Hello","zh":"你好"}]}`。时间单�
 
 观察至少两句中英对照，检查模式切换、进度跳转后的配对、直播字幕修订/消失、服务失败提示；验证拖动、透明、移出隐藏工具栏、关闭与重新开启，核对原生 CC。不要把“文件已修改”说成“当前页面已生效”。
 
-代码回归：`python3 -m unittest discover -s tests -v`、`node --test tests/translation-runtime.test.js`；有 Chrome 时可运行 `python3 tests/browser_checks.py`，使用隔离配置与模拟译文，不连接真实服务。
+代码回归：`python3 -m unittest discover -s tests -v`、`node --test tests/translation-runtime.test.js tests/chinese-interpretation.test.cjs`；有 Chrome 时可运行 `python3 tests/browser_checks.py`，使用隔离配置与模拟译文/语音，不连接真实服务。真实出声的验收见语音说明。

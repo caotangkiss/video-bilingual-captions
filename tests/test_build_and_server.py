@@ -22,6 +22,20 @@ class BuilderTests(unittest.TestCase):
         self.assertIn('// @grant        none', result)
         self.assertIn('"mode":"full"', result)
         self.assertNotIn('/* CAPTION_CONTROLLER */', result)
+        self.assertNotIn('installChineseInterpretation', result)
+
+    def test_optional_speech_uses_recording_translations_and_video_selector(self):
+        data = {'cues': [{'start': 0, 'end': 3, 'en': 'Hello', 'zh': '你好'}]}
+        result = build(data, MATCH, TEMPLATE, speech=True, video_selector='#lesson')
+        self.assertIn('installChineseInterpretation(cues, {videoSelector: config.videoSelector})', result)
+        self.assertIn('"videoSelector":"#lesson"', result)
+        self.assertNotIn('/* OPTIONAL_SPEECH */', result)
+        self.assertIn('// @grant        none', result)
+
+    def test_speech_rejects_live_and_incomplete_translations(self):
+        for data, live in [({}, True), ({'cues': [{'start': 0, 'end': 3, 'en': 'Hello'}]}, False)]:
+            with self.subTest(live=live), self.assertRaisesRegex(ValueError, '--speech requires'):
+                build(data, MATCH, TEMPLATE, live=live, translation_url=ENDPOINT, speech=True)
 
     def test_incremental_and_live_inputs(self):
         for live in [False, True]:

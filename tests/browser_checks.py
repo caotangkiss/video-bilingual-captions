@@ -42,9 +42,25 @@ const [en, zh] = grid.children;
 const mode = panel.querySelector('select');
 const buttons = [...panel.querySelectorAll('button')];
 '''
+SPEECH_SETUP = '''
+let videoPaused = true;
+Object.defineProperty(v, 'paused', {get: () => videoPaused});
+v.volume = 0.8;
+const speech = new EventTarget();
+Object.assign(speech, {
+  paused: false, spoken: [], current: null,
+  getVoices: () => [{lang: 'zh-CN', voiceURI: 'test-local', name: 'Test voice', localService: true}],
+  speak(u) {this.spoken.push(u); this.current = u; u.onstart();},
+  cancel() {this.current = null;},
+  pause() {this.paused = true;}, resume() {this.paused = false;},
+});
+Object.defineProperty(window, 'speechSynthesis', {value: speech});
+window.SpeechSynthesisUtterance = function(text) {this.text = text;};
+'''
 CASES = {
     'stream': '''
 await sleep(50);
+check(!document.getElementById('pai-voice-controls'), 'Caption-only build has no speech controls');
 check(en.textContent === 'Hello' && zh.textContent === '', 'English is immediate');
 check(calls.map(c => c.text).join(',') === 'Hello,Welcome', 'Bounded lookahead');
 calls[0].reply('你好'); calls[1].reply('欢迎'); await sleep(30);
@@ -77,6 +93,28 @@ check(calls[2].aborted, 'Switch cancels far future work');
 mode.value = 'full'; mode.dispatchEvent(new Event('change')); await sleep(50);
 calls[1].reply('欢迎'); calls[3].reply('跳转之后'); await sleep(50);
 check(en.textContent === 'Hello' && zh.textContent === '你好', 'Full mode starts after all ready');
+''',
+    'speech': '''
+await sleep(50);
+const voiceButton = document.getElementById('pai-voice-toggle');
+check(voiceButton && speech.spoken.length === 0, 'Speech is optional and off by default');
+voiceButton.click();
+check(speech.spoken.length === 0, 'Paused video stays silent');
+videoPaused = false; v.dispatchEvent(new Event('playing'));
+check(speech.current.text === '你好' && Math.abs(v.volume - 0.16) < 0.001, 'First spoken cue and ducking');
+buttons.find(b => b.textContent.includes('关闭翻译')).click();
+check(getComputedStyle(panel).display === 'none' && speech.current, 'Closing captions leaves speech active');
+videoPaused = true; v.dispatchEvent(new Event('pause'));
+check(speech.paused && v.volume === 0.8, 'Pause restores original audio');
+videoPaused = false; v.dispatchEvent(new Event('playing'));
+check(!speech.paused && speech.spoken.length === 1, 'Resume continues the same cue');
+playTime = 5; await sleep(300);
+check(speech.current.text === '欢迎', 'Second cue follows video with captions hidden');
+voiceButton.click(); check(!speech.current && v.volume === 0.8, 'Off stops speech and restores volume');
+[...document.querySelectorAll('button')].find(b => b.textContent === '开启双语字幕').click();
+await sleep(300);
+check(en.textContent === 'Welcome' && zh.textContent === '欢迎', 'Captions still work with speech off');
+check(track.mode === 'showing', 'Speech leaves native CC unchanged');
 ''',
     'live': '''
 check(mode.querySelector('option[value="full"]').disabled, 'Full mode unavailable for live');
@@ -128,14 +166,18 @@ def main():
     with tempfile.TemporaryDirectory(prefix='bilingual-browser-') as tmp:
         for name, checks in CASES.items():
             live = name in ('live', 'dom')
-            script = build({} if live else TIMELINE, 'https://example.com/watch/test', TEMPLATE,
+            data = {} if live else TIMELINE
+            if name == 'speech':
+                data = {'cues': [dict(c, zh=zh) for c, zh in zip(TIMELINE['cues'], ['你好', '欢迎', '跳转之后'])]}
+            script = build(data, 'https://example.com/watch/test', TEMPLATE,
                            live=live, mode='full' if name == 'full' else 'stream',
                            source_selector='#live-source' if name == 'dom' else '',
+                           speech=name == 'speech',
                            translation_url='http://127.0.0.1:8766/translate')
             path = Path(tmp) / (name + '.html')
             checks = COMMON + checks
             html = '<!doctype html><meta charset="UTF-8"><video style="width:640px;height:360px"></video><pre id="result">RUNNING</pre>'
-            html += '<script>' + SETUP + '</script><script>' + script + '</script><script>'
+            html += '<script>' + SETUP + (SPEECH_SETUP if name == 'speech' else '') + '</script><script>' + script + '</script><script>'
             html += '(async()=>{try{' + checks + '\ndocument.getElementById("result").textContent="PASS";}catch(e){document.getElementById("result").textContent="FAIL: "+e.message;}})();</script>'
             path.write_text(html)
             result = subprocess.run([CHROME, '--headless', '--no-first-run', '--no-default-browser-check',

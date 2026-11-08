@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Video Bilingual Captions
 // @namespace    local.bilingual
-// @version      33
+// @version      34
 // @match        https://example.invalid/video/demo
 // @run-at       document-idle
 // @grant        none
@@ -51,4 +51,5 @@ header.addEventListener('pointerup',endDrag);header.addEventListener('pointercan
 window.addEventListener('resize',()=>{if(!panel.hidden){const r=panel.getBoundingClientRect();movePanel(r.left,r.top);}});
 
 /* CAPTION_CONTROLLER */
+/* OPTIONAL_SPEECH */
 })();

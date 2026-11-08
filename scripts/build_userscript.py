@@ -11,7 +11,7 @@ ASSETS = Path(__file__).resolve().parents[1] / 'assets'
 
 
 def build(data, match, template, *, mode=None, live=False,
-          translation_url='', token='', source_selector='', video_selector=''):
+          translation_url='', token='', source_selector='', video_selector='', speech=False):
     if not isinstance(data, dict) or not isinstance(data.get('cues', []), list):
         raise ValueError('Expected a JSON object with a cues array')
     cues = data.get('cues', [])
@@ -32,6 +32,8 @@ def build(data, match, template, *, mode=None, live=False,
         if 'zh' in cue and not isinstance(cue['zh'], str):
             raise ValueError('Chinese text must be a string')
     cues = [dict(c, en=c['en'].strip(), zh=c.get('zh', '').strip()) for c in cues]
+    if speech and (live or any(not c['zh'] for c in cues)):
+        raise ValueError('--speech requires a recording with complete Chinese translations; live/incremental speech is not supported')
     url = urlsplit(match)
     if (url.scheme != 'https' or not url.hostname or url.username or url.password
             or '*' in url.netloc or url.path in ('', '/', '/*')
@@ -60,6 +62,14 @@ def build(data, match, template, *, mode=None, live=False,
         if result.count(placeholder) != 1:
             raise ValueError(f'Maintained template {marker} marker missing')
         result = result.replace(placeholder, (ASSETS / filename).read_text(encoding='utf-8'))
+    placeholder = '/* OPTIONAL_SPEECH */'
+    if result.count(placeholder) != 1:
+        raise ValueError('Maintained template OPTIONAL_SPEECH marker missing')
+    speech_code = ''
+    if speech:
+        speech_code = (ASSETS / 'chinese-interpretation.js').read_text(encoding='utf-8')
+        speech_code += '\ninstallChineseInterpretation(cues, {videoSelector: config.videoSelector});'
+    result = result.replace(placeholder, speech_code)
     result = re.sub(r'^// @match\s+.*$', lambda _: '// @match        ' + match, result, flags=re.M)
     result = re.sub(r'^// @name\s+.*$', lambda _: '// @name         视频双语字幕 ' + url.path[-40:], result, flags=re.M)
     if translation_url:
@@ -74,6 +84,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--mode', choices=['full', 'stream'])
     parser.add_argument('--live', action='store_true', help='Read active English TextTrack cues or a caption DOM selector')
+    parser.add_argument('--speech', action='store_true', help='Add an independent Chinese speech toggle (fully translated recording only)')
     parser.add_argument('--source-selector', default='')
     parser.add_argument('--video-selector', default='')
     parser.add_argument('--translation-url', default='')
@@ -84,7 +95,7 @@ def main():
         result = build(data, args.match, (ASSETS / 'player.user.js').read_text(encoding='utf-8'),
                        mode=args.mode, live=args.live, translation_url=args.translation_url,
                        token=args.token_file.read_text().strip() if args.token_file else '',
-                       source_selector=args.source_selector, video_selector=args.video_selector)
+                       source_selector=args.source_selector, video_selector=args.video_selector, speech=args.speech)
     except (ValueError, KeyError, TypeError) as exc:
         parser.error(str(exc))
     args.output.write_text(result, encoding='utf-8')
