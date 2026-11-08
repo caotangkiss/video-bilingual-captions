@@ -1,13 +1,15 @@
 // ==UserScript==
 // @name         Video Bilingual Captions
 // @namespace    local.bilingual
-// @version      32
+// @version      33
 // @match        https://example.invalid/video/demo
 // @run-at       document-idle
 // @grant        none
 // ==/UserScript==
 (function(){
 const cues = [];
+const config = {};
+/* TRANSLATION_RUNTIME */
 const panel=document.createElement('section');
 panel.id='pai-bilingual-panel';
 panel.style.cssText='position:fixed;right:18px;top:150px;width:min(480px,40vw);z-index:2147483646;background:#fff;color:#222;border:2px solid #3465d9;border-radius:10px;box-shadow:0 3px 15px #0003;font:16px/1.5 sans-serif;max-height:45vh;overflow:auto;padding:12px;box-sizing:border-box';
@@ -31,8 +33,9 @@ transparency.onclick=()=>{transparent=!transparent;applyTransparency();try{local
 const grid=document.createElement('div');grid.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px';
 const en=document.createElement('div'),zh=document.createElement('div');zh.style.color='#175b36';grid.append(en,zh);panel.append(header,grid);
 const toggle=document.createElement('button');toggle.type='button';toggle.style.cssText='position:fixed;right:18px;top:100px;z-index:2147483647;padding:10px 16px;background:#2556ba;color:white;border:0;border-radius:8px;font-size:16px;cursor:pointer';
-let enabled=true,last=-2;
-function setEnabled(value){enabled=value;panel.hidden=!value;panel.style.setProperty("display",value?"block":"none","important");toggle.textContent=value?'关闭双语字幕':'开启双语字幕';toggle.setAttribute('aria-pressed',String(value));}
+let enabled=true;
+let controller=null;
+function setEnabled(value){enabled=value;panel.hidden=!value;panel.style.setProperty("display",value?"block":"none","important");toggle.textContent=value?'关闭双语字幕':'开启双语字幕';toggle.setAttribute('aria-pressed',String(value));if(controller)controller.setEnabled(value);}
 toggle.onclick=()=>setEnabled(!enabled);close.onclick=()=>setEnabled(false);
 document.body.append(panel,toggle);setEnabled(true);applyTransparency();
 const positionKey='pai-bilingual-panel-position';
@@ -41,12 +44,11 @@ label.textContent='中英对照字幕 · 拖动移动';
 let dragging=null;
 function movePanel(x,y){const r=panel.getBoundingClientRect();panel.style.right='auto';panel.style.left=Math.max(0,Math.min(x,innerWidth-r.width))+'px';panel.style.top=Math.max(0,Math.min(y,innerHeight-Math.min(r.height,innerHeight)))+'px';}
 try{const pos=JSON.parse(localStorage.getItem(positionKey));if(pos&&Number.isFinite(pos.x)&&Number.isFinite(pos.y))movePanel(pos.x,pos.y);}catch(e){}
-header.addEventListener('pointerdown',e=>{if(e.target.closest('button')||e.button!==0)return;const r=panel.getBoundingClientRect();dragging={id:e.pointerId,x:e.clientX-r.left,y:e.clientY-r.top};header.setPointerCapture(e.pointerId);header.style.cursor='grabbing';e.preventDefault();});
+header.addEventListener('pointerdown',e=>{if(e.target.closest('button,select')||e.button!==0)return;const r=panel.getBoundingClientRect();dragging={id:e.pointerId,x:e.clientX-r.left,y:e.clientY-r.top};header.setPointerCapture(e.pointerId);header.style.cursor='grabbing';e.preventDefault();});
 header.addEventListener('pointermove',e=>{if(dragging&&dragging.id===e.pointerId)movePanel(e.clientX-dragging.x,e.clientY-dragging.y);});
 function endDrag(e){if(!dragging||dragging.id!==e.pointerId)return;dragging=null;header.style.cursor='grab';const r=panel.getBoundingClientRect();try{localStorage.setItem(positionKey,JSON.stringify({x:r.left,y:r.top}));}catch(e){}}
 header.addEventListener('pointerup',endDrag);header.addEventListener('pointercancel',endDrag);
 window.addEventListener('resize',()=>{if(!panel.hidden){const r=panel.getBoundingClientRect();movePanel(r.left,r.top);}});
 
-function time(){const vs=[...document.querySelectorAll('video')];const v=vs.find(v=>v.offsetWidth>0)||vs[0];return v&&Number.isFinite(v.currentTime)?v.currentTime:-1;}
-setInterval(()=>{if(!enabled)return;const t=time();let lo=0,hi=cues.length-1,idx=-1;while(lo<=hi){const m=(lo+hi)>>1;if(cues[m].start<=t){idx=m;lo=m+1;}else hi=m-1;}if(idx===last)return;last=idx;en.textContent=idx<0?'等待课程字幕…':cues[idx].en;zh.textContent=idx<0?'':cues[idx].zh;},250);
+/* CAPTION_CONTROLLER */
 })();
